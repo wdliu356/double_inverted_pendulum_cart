@@ -6,7 +6,47 @@ from base_env import BaseEnv
 import gym
 from mppi import MPPI
 
-    
+
+
+
+def dynamics_numpy(state,control):
+    # state = [x, x_dot, theta1, theta1_dot, theta2, theta2_dot]
+    # control = [u]
+    # state_dot = [x_dot, x_ddot, theta1_dot, theta1_ddot, theta2_dot, theta2_ddot]
+    # state_dot = f(state, control)
+    # batch input, state shape = (batch_size, 6)
+    # batch input, control shape = (batch_size, 1)
+    # All the data should be in numpy array
+    next_state = None
+    dt = 0.05
+    g = 9.81
+    mc = 1
+    mp1 = 0.1
+    mp2 = 0.1
+    L1 = 0.5
+    L2 = 0.5
+
+    # --- Start dynamic model
+    theta = np.array([state[0], state[2], state[4]])
+    theta_dot = np.array([state[1], state[3], state[5]])
+    theta_ddot = np.zeros(3)
+    D = np.array([[mc+mp1+mp2, (1/2*mp1+mp2)*L1*np.cos(theta[1]), (1/2*mp2)*L2*np.cos(theta[2])],
+                  [(1/2*mp1+mp2)*L1*np.cos(theta[1]), (1/3*mp1+mp2)*L1**2, (1/2*mp2)*L1*L2*np.cos(theta[1]-theta[2])],
+                  [(1/2*mp2)*L2*np.cos(theta[2]), (1/2*mp2)*L1*L2*np.cos(theta[1]-theta[2]), (1/3*mp2)*L2**2]])
+    C = np.array([[0, -(1/2*mp1+mp2)*L1*theta_dot[1]*np.sin(theta[1]), -(1/2*mp2)*L2*theta_dot[2]*np.sin(theta[2])],
+                  [0, 0, (1/2*mp2)*L1*L2*theta_dot[2]*np.sin(theta[1]-theta[2])],
+                  [0, -(1/2*mp2)*L1*L2*theta_dot[1]*np.sin(theta[1]-theta[2]), 0]])
+    G = np.array([0, -1/2*(mp1+mp2)*g*L1*np.sin(theta[1]), -1/2*mp2*g*L2*np.sin(theta[2])])
+    H = np.array([1, 0, 0])
+    theta_ddot = np.linalg.inv(D) @ (H*control - C @ theta_dot - G)
+    theta_dot = theta_dot + theta_ddot*dt
+    theta = theta + theta_dot*dt
+    next_state = np.array([theta[0], theta_dot[0], theta[1], theta_dot[1], theta[2], theta_dot[2]])
+
+    return next_state
+
+
+
 def dynamics_analytic(state, control):
     # state = [x, x_dot, theta1, theta1_dot, theta2, theta2_dot]
     # control = [u]
