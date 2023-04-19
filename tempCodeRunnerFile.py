@@ -1,2 +1,2 @@
-fig = plt.figure()
-camera = Camera(fig)
+if not os.path.exists('plots'):
+#     os.makedirs('plots')
