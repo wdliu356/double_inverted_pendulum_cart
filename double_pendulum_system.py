@@ -94,7 +94,7 @@ def dynamics_analytic(state, control):
         G[2] = -1/2*mp2*g*L2*torch.sin(theta[2])
         H = torch.zeros(3,dtype=torch.float32)
         H[0] = 1.
-        theta_ddot = -torch.matmul(torch.inverse(D).float(), torch.matmul(C, theta_dot).float() + G - H*control[i,:].float())
+        theta_ddot = -torch.matmul(torch.pinverse(D).float(), torch.matmul(C, theta_dot).float() + G - H*control[i,:].float())
         # --- End dynamic model
         theta_dot = theta_dot + theta_ddot*dt
         theta = theta + theta_dot*dt
@@ -183,8 +183,9 @@ class DoublePendulumControl(object):
         #                   [0.,0.,0.,0,10.,0.],
         #                   [0.,0.,0.,0.,0.,0.5]])
         
-        Q = torch.diag(torch.tensor([0.5, 1., 150., 20., 100., 1.5]))
-        # Q = torch.diag(torch.tensor([1., 1., 150., 20., 100., 1.5]))
+        # Q = torch.diag(torch.tensor([0.5, 1., 150., 20., 100., 1.5]))
+        # Q = torch.diag(torch.tensor([5., 1.5, 150., 20., 100., 5.]))
+        Q = torch.diag(torch.tensor([50., 200., 1000., 130., 1000., 130.]))
         R = torch.tensor([[0.0]])
         state_cost = (diff @ Q @ diff.T).diag()
         # print(state_cost.shape)
