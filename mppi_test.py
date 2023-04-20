@@ -18,7 +18,7 @@ import imageio
 # %autoreload 2
 
 from double_pendulum_system import *
-controller = DoublePendulumControl(dynamics=dynamics_analytic,cost_function=cost_function)
+controller = DoublePendulumControl(dynamics=dynamics_analytic,cost_function=cost_function,horizon = 17)
 initial_state = torch.from_numpy(np.random.randn(6))
 initial_state = torch.tensor([0,0,np.pi,0,np.pi,0])
 state = initial_state
@@ -40,7 +40,7 @@ for i in pbar:
     state = dynamics_analytic(state,action)
     state = state.squeeze()
     # print(state)
-    error_i = np.linalg.norm(state[1:]-target[1:])
+    error_i = np.linalg.norm((state-target)@torch.diag(torch.tensor([0.1, 0.1, 1, 0.1, 1, 0.1])))
     pbar.set_description(f'Goal Error: {error_i:.4f}')
 
     # --- Start plotting
@@ -68,7 +68,7 @@ for i in pbar:
     plt.clf()
     
     
-    if error_i < 0.1:
+    if error_i < 0.4:
         break
     # --- End plotting
 plt.show()
