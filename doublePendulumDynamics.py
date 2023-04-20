@@ -60,6 +60,7 @@ class Cost:
         Q = self.Q
         dx = self.x_delta(self.x_final, x)
         return self.terminal_scale * dx @ Q @ dx
+    
     @staticmethod
     def x_delta(x1, x2):
         dx = x1 - x2

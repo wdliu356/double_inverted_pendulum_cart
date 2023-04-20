@@ -8,6 +8,8 @@ from autograd import grad
 from autograd import jacobian
 from autograd.numpy import sin, cos
 
+import sys
+
 # Programmer: Junkai Zhang, April 8th 2023
 # Purpose: This program implements the Differential Dynamic Programming (DDP) 
 #          algorithm based on the autograd package.
@@ -20,12 +22,14 @@ class DDPcontroller:
         self, 
         dynamics,
         cost,
-        tolerance = 1e-5,
-        max_iter = 100,
-        T = 100,
+        tolerance = 1e-3,
+        max_iter = 50,
+        T = 200,
         state_dim = 6,
         control_dim = 1,
-
+        rho = 0.9,
+        max_dc_iter = 10,
+        dt = 0.05
     ):
         self.dynamics = dynamics
         self.cost = cost
@@ -36,32 +40,49 @@ class DDPcontroller:
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.T = T # Total time steps, actions should be T - 1 times
+        self.rho = rho # Backtracking line search parameter
+        self.dt = dt
+
+        # Define functions and derivatives needed
+        # Define V, Vx, Vxx functions
+        self.V = self.terminal_cost
+        self.Vx = grad(self.V)
+        self.Vxx = jacobian(self.Vx)
+
+        # Define L, Lx, Lxx, Lu, Luu, Lxu functions
+        self.L = lambda x, u: self.running_cost(x, u)
+        self.Lx = grad(self.L, 0)
+        self.Lu = grad(self.L, 1)
+        self.Lxx = jacobian(self.Lx, 0)
+        self.Luu = jacobian(self.Lu, 1)
+        self.Lxu = jacobian(self.Lx, 1)
+        self.Lux = jacobian(self.Lu, 0)
+
+        # define F, Fx, Fu functions
+        self.F = self.dynamics
+        
+        self.Fx = jacobian(self.F, 0)
+        self.Fu = jacobian(self.F, 1)
+        self.max_dc_iter = max_dc_iter
+
 
     def command(self, state):
         # DDP algorithm
         # state: current state with shape (state_dim, )
         # return: control action with shape (control_dim, )
-
-        # Define functions and derivatives needed
-        # Define V, Vx, Vxx functions
-        V = self.terminal_cost
-        Vx = grad(V)
-        Vxx = jacobian(Vx)
-
-        # Define L, Lx, Lxx, Lu, Luu, Lxu functions
-        L = self.running_cost
-        Lx = grad(L, 0)
-        Lu = grad(L, 1)
-        Lxx = jacobian(Lx, 0)
-        Luu = jacobian(Lu, 1)
-        Lxu = jacobian(Lx, 1)
-        Lux = jacobian(Lu, 0)
-
-        # define F, Fx, Fu functions
-        F = self.dynamics
-        Fx = jacobian(F, 0)
-        Fu = jacobian(F, 1)
-
+        V = self.V
+        Vx = self.Vx
+        Vxx = self.Vxx
+        L = self.L
+        Lx = self.Lx
+        Lu = self.Lu
+        Lxx = self.Lxx
+        Luu = self.Luu
+        Lxu = self.Lxu
+        Lux = self.Lux
+        F = self.F
+        Fx = self.Fx
+        Fu = self.Fu
 
         # Initialize the state
         x_init = state
@@ -75,40 +96,119 @@ class DDPcontroller:
 
         # Initialize the cost
         prev_cost = self._compute_total_cost(X, U)
-        print(prev_cost)
 
-        for i in range(self.max_iter):
+        # i = 0
+        miu_1 = 0.
+        miu_2 = 0.
+        # while i < self.max_iter:
+        for iter in range(self.max_iter):
+
+            break_flag = False
+
+            # i += 1
+            # print(str(i) + "i")
 
             # Backward pass
             # Initialize the cost-to-go
             Vx_val = Vx(X[-1])
             Vxx_val = Vxx(X[-1])
             
-            for i in range(self.T - 2, -1, -1):
+            k_list = []
+            K_list = []
+            
+            for t in range(self.T - 2, -1, -1):
                 # Compute the cost-to-go
                 # TODO: Add miu_1 and miu_2 adjustment
-                Qx = Lx(X[i], U[i]) + Fx(X[i], U[i]).T @ Vx_val
-                Qu = Lu(X[i], U[i]) + Fu(X[i], U[i]).T @ Vx_val
+                x = X[t]
+                u = U[t]
+                Fx_val = Fx(x, u)
+                Fu_val = Fu(x, u)
+                Lx_val = Lx(x, u)
+                Lu_val = Lu(x, u)
+                Lxx_val = Lxx(x, u)
+                Luu_val = Luu(x, u)
+                Lux_val = Lux(x, u)
 
-                miu_1 = 0
-                miu_2 = 0
+                # No need ------------------------------------------------------
+                # Qx = Lx(X[t], U[t]) + Fx(X[t], U[t]).T @ Vx_val
+                # Qu = Lu(X[t], U[t]) + Fu(X[t], U[t]).T @ Vx_val
+
+                # miu_1 = 0
+                # miu_2 = 0
+                # eye_x = np.eye(self.state_dim)
+                # eye_u = np.eye(self.control_dim)
+                # Qxx = Lxx(X[t], U[t]) + Fx(X[t], U[t]).T @ (Vxx_val + miu_1 * eye_x) @ Fx(X[t], U[t])
+                # # Qux = Lxu(X[i], U[i]) + Fu(X[i], U[i]).T @ Vxx_val @ Fx(X[i], U[i])
+                # Qux = Lux(X[t], U[t]) + Fu(X[t], U[t]).T @ (Vxx_val + miu_1 * eye_x) @ Fx(X[t], U[t])
+                # Quu = Luu(X[t], U[t]) + Fu(X[t], U[t]).T @ (Vxx_val + miu_1 * eye_x) @ Fu(X[t], U[t]) + miu_2 * eye_u
+                # No need ------------------------------------------------------
+
+
+                Qx = Lx_val + Fx_val.T @ Vx_val
+                Qu = Lu_val + Fu_val.T @ Vx_val
+
                 eye_x = np.eye(self.state_dim)
                 eye_u = np.eye(self.control_dim)
-                Qxx = Lxx(X[i], U[i]) + Fx(X[i], U[i]).T @ (Vxx_val + miu_1 * eye_x) @ Fx(X[i], U[i])
+                Qxx = Lxx_val + Fx_val.T @ (Vxx_val + miu_1 * eye_x) @ Fx_val
                 # Qux = Lxu(X[i], U[i]) + Fu(X[i], U[i]).T @ Vxx_val @ Fx(X[i], U[i])
-                Qux = Lux(X[i], U[i]) + Fu(X[i], U[i]).T @ (Vxx_val + miu_1 * eye_x) @ Fx(X[i], U[i])
-                Quu = Luu(X[i], U[i]) + Fu(X[i], U[i]).T @ (Vxx_val + miu_1 * eye_x) @ Fu(X[i], U[i]) + miu_2 * eye_u
+                Qux = Lux_val + Fu_val.T @ (Vxx_val + miu_1 * eye_x) @ Fx_val
+                Quu = Luu_val + Fu_val.T @ (Vxx_val + miu_1 * eye_x) @ Fu_val + miu_2 * eye_u
+                # Determine whether the Quu is invertible
+                det = np.linalg.det(Quu)
+                if abs(det) < 1e-6:
+                    print("The array is singular and not invertible.")
+                    break_flag = True
+                    miu_1 += 0.1
+                    miu_2 += 0.1
+                    break
                 
                 # Compute the control gain
                 k = -np.linalg.inv(Quu) @ Qu
                 K = -np.linalg.inv(Quu) @ Qux
+
+                # Add k and K to list
+                k_list.append(k)
+                K_list.append(K)
+
                 # Update the cost-to-go
                 Vx_val = Qx + K.T @ Quu @ k + K.T @ Qu + Qux.T @ k
                 Vxx_val = Qxx + K.T @ Quu @ K + K.T @ Qux + Qux.T @ K
             
-            fx_val = Fx(X[-1], U[-1])
+            if break_flag:
+                    continue
 
+            # Reverse the list
+            k_list.reverse()
+            K_list.reverse()
 
+            # Forward pass
+            eps = 1.
+            dc_iter = 0
+            while dc_iter < self.max_dc_iter:
+                dc_iter += 1
+                # Compute the trajectory
+                X_new = np.zeros_like(X)
+                U_new = np.zeros_like(U)
+                X_new[0] = X[0].copy()
+                for t in range(self.T - 1):
+                    delta_x = X_new[t] - X[t]
+                    U_new[t] = U[t] + eps *  k_list[t] + K_list[t] @ delta_x
+                    X_new[t + 1] = self._compute_dynamics(X_new[t], U_new[t])
+                
+                # Compute the cost
+                cost = self._compute_total_cost(X_new, U_new)
+                if (cost < prev_cost):
+                    X = X_new
+                    U = U_new
+                    break
+                else:
+                    eps *= self.rho
+            
+            if dc_iter == self.max_dc_iter or abs(prev_cost - cost) < self.tolerance:
+                break
+            prev_cost = cost
+        return U[0]
+                
     def _compute_dynamics(self,state,control):
         return self.dynamics(state,control)
     
