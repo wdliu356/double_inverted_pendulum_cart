@@ -24,7 +24,7 @@ class DDPcontroller:
         cost,
         tolerance = 1e-3,
         max_iter = 50,
-        T = 200,
+        T = 20,
         state_dim = 6,
         control_dim = 1,
         rho = 0.9,
@@ -45,7 +45,7 @@ class DDPcontroller:
 
         # Define functions and derivatives needed
         # Define V, Vx, Vxx functions
-        self.V = self.terminal_cost
+        self.V = lambda x: self.terminal_cost(x)
         self.Vx = grad(self.V)
         self.Vxx = jacobian(self.Vx)
 
@@ -66,7 +66,7 @@ class DDPcontroller:
         self.max_dc_iter = max_dc_iter
 
 
-    def command(self, state):
+    def command(self, state, action = None):
         # DDP algorithm
         # state: current state with shape (state_dim, )
         # return: control action with shape (control_dim, )
@@ -87,8 +87,11 @@ class DDPcontroller:
         # Initialize the state
         x_init = state
         # Initialize the control with random values
-        U = np.random.rand(self.T - 1, self.control_dim)
-        
+        if action is None:
+            U = np.random.rand(self.T - 1, self.control_dim)
+        else:
+            U = np.repeat(action, self.T - 1, axis = 0).reshape(self.T - 1, self.control_dim)
+            
         # Initialize the trajectory
         # TODO: Use rollout function to initialize the trajectory
         X = self._rollout(x_init, U)
@@ -191,7 +194,16 @@ class DDPcontroller:
                 U_new = np.zeros_like(U)
                 X_new[0] = X[0].copy()
                 for t in range(self.T - 1):
+                    # if (np.isnan(X_new[t]).any() or np.isinf(X_new[t]).any()):
+                    #     print("K is nan or inf")
+                    #     print(str(t) + str(X_new[t]))
+                    # if (np.isnan(X[t]).any() or np.isinf(X[t]).any()):
+                    #     print("K is nan or inf")
+                    #     print(X[t])
                     delta_x = X_new[t] - X[t]
+                    # if (np.isnan(delta_x).any() or np.isinf(delta_x).any()):
+                    #     print("K is nan or inf")
+                    #     print(delta_x)
                     U_new[t] = U[t] + eps *  k_list[t] + K_list[t] @ delta_x
                     X_new[t + 1] = self._compute_dynamics(X_new[t], U_new[t])
                 
@@ -203,8 +215,9 @@ class DDPcontroller:
                     break
                 else:
                     eps *= self.rho
-            
-            if dc_iter == self.max_dc_iter or abs(prev_cost - cost) < self.tolerance:
+
+            # if dc_iter == self.max_dc_iter or abs(prev_cost - cost) < self.tolerance:
+            if abs(prev_cost - cost) < self.tolerance:
                 break
             prev_cost = cost
         return U[0]

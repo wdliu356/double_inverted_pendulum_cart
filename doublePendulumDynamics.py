@@ -33,7 +33,9 @@ def dynamics_numpy(state,control):
                   [0, 0, (1/2*mp2)*L1*L2*theta_dot[2]*np.sin(theta[1]-theta[2])],
                   [0, -(1/2*mp2)*L1*L2*theta_dot[1]*np.sin(theta[1]-theta[2]), 0]])
     G = np.array([0, -1/2*(mp1+mp2)*g*L1*np.sin(theta[1]), -1/2*mp2*g*L2*np.sin(theta[2])])
-    H = np.array([1, 0, 0])
+    H = np.array([1., 0., 0.])
+    # if (np.linalg.det(D) < 1e-6):
+    #     D = D + 1e-6*np.eye(D.shape[0])
     theta_ddot = np.linalg.inv(D) @ (H*control - C @ theta_dot - G)
     theta_dot = theta_dot + theta_ddot*dt
     theta = theta + theta_dot*dt
